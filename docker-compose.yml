@@ -1,0 +1,12 @@
+# Runs the app against your existing Postgres (e.g. Neon). Reads secrets from .env.
+# Start:  docker compose up --build
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped

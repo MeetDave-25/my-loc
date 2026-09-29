@@ -1,0 +1,18 @@
+{
+  "name": "whereabouts",
+  "version": "1.0.0",
+  "description": "Consent-based location sharing. Everyone opts in, reports only their own location, and shares only with groups they join.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "gen-cert": "node gen-cert.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.4",
+    "express": "^4.19.2",
+    "nodemailer": "^10.0.12",
+    "pg": "^8.23.0",
+    "selfsigned": "^5.5.0"
+  }
+}

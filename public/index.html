@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Whereabouts — consent-based location sharing</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+  :root { --bg:#0f1720; --panel:#17212b; --line:#26323f; --fg:#e6edf3; --muted:#8ba0b3; --accent:#3fb950; --accent2:#388bfd; --danger:#f85149; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  h1 { font-size:16px; margin:0; }
+  .sub { color:var(--muted); font-size:12px; }
+  .wrap { display:flex; min-height:calc(100vh - 54px); }
+  .side { width:340px; max-width:100%; padding:16px; border-right:1px solid var(--line); overflow:auto; }
+  #map { flex:1; min-height:400px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 4px; }
+  input { width:100%; padding:8px 10px; background:#0d1117; border:1px solid var(--line); border-radius:6px; color:var(--fg); }
+  button { padding:8px 12px; border:0; border-radius:6px; background:var(--accent2); color:#fff; cursor:pointer; font-size:13px; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--fg); }
+  button.danger { background:var(--danger); }
+  button.on { background:var(--accent); }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .group { border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:8px; }
+  .group h4 { margin:0 0 4px; font-size:14px; }
+  .code { font-family: ui-monospace, monospace; background:#0d1117; padding:2px 6px; border-radius:4px; }
+  .msg { font-size:12px; margin-top:8px; min-height:16px; }
+  .err { color:var(--danger); } .ok { color:var(--accent); }
+  .hidden { display:none; }
+  .banner { background:#1c2b1c; border:1px solid #2ea043; color:#b7f0c0; font-size:12px; padding:10px 12px; border-radius:8px; margin-bottom:14px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Whereabouts</h1>
+    <div class="sub">Consent-based location sharing — you share only your own position, only with groups you join.</div>
+  </div>
+  <div id="whoami" class="row"></div>
+</header>
+
+<div class="wrap">
+  <div class="side">
+    <!-- AUTH -->
+    <div id="authCard" class="card">
+      <div class="row" style="margin-bottom:8px">
+        <button id="tabLogin" class="ghost">Log in</button>
+        <button id="tabRegister" class="ghost">Register</button>
+      </div>
+      <label>Email</label><input id="email" type="email" autocomplete="email" />
+      <div id="nameWrap" class="hidden"><label>Display name</label><input id="displayName" /></div>
+      <label>Password (min 8)</label><input id="password" type="password" autocomplete="current-password" />
+      <div class="row" style="margin-top:10px"><button id="authBtn">Log in</button></div>
+      <div id="authMsg" class="msg"></div>
+    </div>
+
+    <!-- APP -->
+    <div id="appPane" class="hidden">
+      <div id="verifyBanner" class="banner hidden" style="background:#3a2a12; border-color:#9e6a1f; color:#f0d9b7">
+        Verify your email to enable location sharing.
+        <button id="resendBtn" class="ghost" style="margin-left:8px">Resend email</button>
+        <span id="resendMsg"></span>
+      </div>
+      <div class="banner">Your location is sent <b>only while you enable sharing</b> for a group, and never leaves your browser until then. Turn any group off to become invisible instantly.</div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div><b>My location</b><div id="locStatus" class="sub">off</div></div>
+          <button id="trackBtn">Start sharing my location</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="wipeBtn" class="danger ghost">Wipe my last position</button>
+        </div>
+        <div id="locMsg" class="msg"></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <b>Who can see me right now</b>
+          <button id="refreshVis" class="ghost">↻</button>
+        </div>
+        <div id="visibility" class="sub" style="margin-top:6px">Loading…</div>
+      </div>
+
+      <div class="card">
+        <b>Create a group</b>
+        <label>Group name</label><input id="groupName" placeholder="Family, Roommates…" />
+        <div class="row" style="margin-top:8px"><button id="createBtn">Create</button></div>
+      </div>
+
+      <div class="card">
+        <b>Join a group</b>
+        <label>Join code</label><input id="joinCode" placeholder="ABCD1234" />
+        <div class="row" style="margin-top:8px"><button id="joinBtn">Join</button></div>
+        <div class="sub" style="margin-top:6px">You join with sharing <b>off</b>. Flip it on when you choose.</div>
+      </div>
+
+      <div id="groups"></div>
+      <div id="appMsg" class="msg"></div>
+
+      <div class="card">
+        <b>Account</b>
+        <label>Current password</label><input id="curPw" type="password" />
+        <label>New password (min 8)</label><input id="newPw" type="password" />
+        <div class="row" style="margin-top:8px">
+          <button id="pwBtn">Change password</button>
+        </div>
+        <div id="pwMsg" class="msg"></div>
+        <hr style="border-color:var(--line); margin:12px 0" />
+        <button id="deleteBtn" class="danger">Delete my account & all my data</button>
+        <div class="sub" style="margin-top:6px">Erases your account, locations, and group memberships. Cannot be undone.</div>
+      </div>
+    </div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let token = localStorage.getItem("token") || null;
+let me = null, mode = "login", watchId = null, map, markers = {}, pollTimer = null;
+
+function ago(ts) {
+  const s = Math.round((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  return `${Math.round(s / 3600)}h ago`;
+}
+
+async function api(path, method = "GET", body) {
+  const res = await fetch("/api" + path, {
+    method,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+// --- auth UI ---
+function setMode(m) {
+  mode = m;
+  $("#nameWrap").classList.toggle("hidden", m !== "register");
+  $("#authBtn").textContent = m === "register" ? "Create account" : "Log in";
+  $("#tabLogin").classList.toggle("on", m === "login");
+  $("#tabRegister").classList.toggle("on", m === "register");
+}
+$("#tabLogin").onclick = () => setMode("login");
+$("#tabRegister").onclick = () => setMode("register");
+setMode("login");
+
+$("#authBtn").onclick = async () => {
+  const email = $("#email").value, password = $("#password").value, displayName = $("#displayName").value;
+  try {
+    const path = mode === "register" ? "/register" : "/login";
+    const data = await api(path, "POST", { email, password, displayName });
+    token = data.token; localStorage.setItem("token", token); me = data.user;
+    showApp();
+  } catch (e) { $("#authMsg").innerHTML = `<span class="err">${e.message}</span>`; }
+};
+
+function updateVerifyBanner() {
+  $("#verifyBanner").classList.toggle("hidden", !!me.emailVerified);
+}
+$("#resendBtn").onclick = async () => {
+  try { await api("/verify/resend", "POST"); $("#resendMsg").innerHTML = ` <span class="ok">Sent — check your inbox.</span>`; }
+  catch (e) { $("#resendMsg").innerHTML = ` <span class="err">${e.message}</span>`; }
+};
+
+function showApp() {
+  $("#authCard").classList.add("hidden");
+  $("#appPane").classList.remove("hidden");
+  $("#whoami").innerHTML = `<span class="sub">${me.displayName}</span> <button id="logoutBtn" class="ghost">Log out</button>`;
+  $("#logoutBtn").onclick = logout;
+  updateVerifyBanner();
+  initMap();
+  refreshGroups();
+  refreshVisibility();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => { refreshMembers(); refreshVisibility(); }, 5000);
+}
+
+async function logout() {
+  try { await api("/logout", "POST"); } catch {}
+  stopTracking(); if (pollTimer) clearInterval(pollTimer);
+  token = null; me = null; localStorage.removeItem("token");
+  location.reload();
+}
+
+// --- map ---
+function initMap() {
+  if (map) return;
+  map = L.map("map").setView([20, 0], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap", maxZoom: 19,
+  }).addTo(map);
+}
+
+// --- geolocation: the browser/OS prompts for permission (consent enforced by the platform) ---
+$("#trackBtn").onclick = () => (watchId === null ? startTracking() : stopTracking());
+
+function startTracking() {
+  if (!navigator.geolocation) { $("#locMsg").innerHTML = `<span class="err">Geolocation not supported</span>`; return; }
+  watchId = navigator.geolocation.watchPosition(async pos => {
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+    try {
+      await api("/location", "POST", { lat, lng, accuracy });
+      $("#locStatus").textContent = `sharing · ±${Math.round(accuracy)}m · ${new Date().toLocaleTimeString()}`;
+      map.setView([lat, lng], Math.max(map.getZoom(), 14));
+    } catch (e) { $("#locMsg").innerHTML = `<span class="err">${e.message}</span>`; }
+  }, err => {
+    $("#locMsg").innerHTML = `<span class="err">${err.message}</span>`;
+    stopTracking();
+  }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
+  $("#trackBtn").textContent = "Stop sharing my location";
+  $("#trackBtn").classList.add("on");
+  $("#locStatus").textContent = "requesting permission…";
+}
+
+function stopTracking() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  $("#trackBtn").textContent = "Start sharing my location";
+  $("#trackBtn").classList.remove("on");
+  $("#locStatus").textContent = "off";
+}
+
+$("#wipeBtn").onclick = async () => {
+  await api("/location", "DELETE");
+  $("#locMsg").innerHTML = `<span class="ok">Last position wiped.</span>`;
+};
+
+// --- groups ---
+$("#createBtn").onclick = async () => {
+  try { await api("/groups", "POST", { name: $("#groupName").value }); $("#groupName").value = ""; refreshGroups(); }
+  catch (e) { $("#appMsg").innerHTML = `<span class="err">${e.message}</span>`; }
+};
+$("#joinBtn").onclick = async () => {
+  try { await api("/groups/join", "POST", { joinCode: $("#joinCode").value }); $("#joinCode").value = ""; refreshGroups(); }
+  catch (e) { $("#appMsg").innerHTML = `<span class="err">${e.message}</span>`; }
+};
+
+async function refreshGroups() {
+  const { groups } = await api("/groups");
+  const el = $("#groups");
+  el.innerHTML = "";
+  if (!groups.length) { el.innerHTML = `<div class="sub">No groups yet. Create or join one.</div>`; return; }
+  for (const g of groups) {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.innerHTML = `
+      <h4>${g.name}</h4>
+      <div class="sub">Join code: <span class="code">${g.joinCode}</span></div>
+      <div class="row" style="margin-top:8px">
+        <button data-share="${g.id}" class="${g.sharing ? "on" : "ghost"}">${g.sharing ? "Sharing ON" : "Sharing OFF"}</button>
+        <button data-leave="${g.id}" class="ghost">Leave</button>
+      </div>`;
+    el.appendChild(div);
+  }
+  el.querySelectorAll("[data-share]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.share, turnOn = b.classList.contains("ghost");
+    try {
+      await api(`/groups/${id}/sharing`, "POST", { sharing: turnOn });
+      $("#appMsg").innerHTML = "";
+    } catch (e) { $("#appMsg").innerHTML = `<span class="err">${e.message}</span>`; }
+    refreshGroups(); refreshMembers(); refreshVisibility();
+  });
+  el.querySelectorAll("[data-leave]").forEach(b => b.onclick = async () => {
+    await api(`/groups/${b.dataset.leave}/leave`, "POST"); refreshGroups(); refreshMembers();
+  });
+  refreshMembers();
+}
+
+async function refreshMembers() {
+  if (!token) return;
+  const { groups } = await api("/groups");
+  const seen = new Set();
+  for (const g of groups) {
+    let members = [];
+    try { ({ members } = await api(`/groups/${g.id}/members`)); } catch { continue; }
+    for (const m of members) {
+      if (!m.location) continue;
+      seen.add(m.id);
+      const { lat, lng } = m.location;
+      const fresh = m.location.updatedAt ? ` · ${ago(m.location.updatedAt)}` : "";
+      const label = `${m.displayName}${m.id === me.id ? " (you)" : ""}${fresh}`;
+      if (markers[m.id]) markers[m.id].setLatLng([lat, lng]).setPopupContent(label);
+      else markers[m.id] = L.marker([lat, lng]).addTo(map).bindPopup(label);
+    }
+  }
+  for (const id of Object.keys(markers)) if (!seen.has(id)) { map.removeLayer(markers[id]); delete markers[id]; }
+}
+
+async function refreshVisibility() {
+  if (!token) return;
+  try {
+    const { viewers } = await api("/visibility");
+    const el = $("#visibility");
+    if (!viewers.length) { el.innerHTML = `<span class="ok">Nobody. You are not visible to anyone.</span>`; return; }
+    const byGroup = {};
+    for (const v of viewers) (byGroup[v.group] ||= []).push(v.viewer);
+    el.innerHTML = Object.entries(byGroup)
+      .map(([g, people]) => `<div><b>${g}</b>: ${people.join(", ")}</div>`).join("");
+  } catch {}
+}
+$("#refreshVis").onclick = refreshVisibility;
+
+$("#pwBtn").onclick = async () => {
+  try {
+    const data = await api("/account/password", "POST",
+      { currentPassword: $("#curPw").value, newPassword: $("#newPw").value });
+    token = data.token; localStorage.setItem("token", token); // old sessions were revoked
+    $("#curPw").value = ""; $("#newPw").value = "";
+    $("#pwMsg").innerHTML = `<span class="ok">Password changed. Other devices signed out.</span>`;
+  } catch (e) { $("#pwMsg").innerHTML = `<span class="err">${e.message}</span>`; }
+};
+
+$("#deleteBtn").onclick = async () => {
+  if (!confirm("Permanently delete your account and all your location data? This cannot be undone.")) return;
+  await api("/account", "DELETE");
+  stopTracking();
+  token = null; localStorage.removeItem("token");
+  location.reload();
+};
+
+// handle the email-verification redirect (?verified=1|0)
+const params = new URLSearchParams(location.search);
+if (params.has("verified")) {
+  const good = params.get("verified") === "1";
+  history.replaceState({}, "", location.pathname);
+  setTimeout(() => alert(good ? "Email verified — you can now share your location." : "Verification link was invalid or expired."), 100);
+}
+
+// auto-login if token present
+(async () => {
+  if (token) { try { me = (await api("/me")).user; showApp(); } catch { localStorage.removeItem("token"); } }
+})();
+</script>
+</body>
+</html>
