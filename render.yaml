@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: whereabouts
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # Set the secret value in the Render dashboard (sync:false keeps it out of git).
+      - key: DATABASE_URL
+        sync: false
+      # Your Render URL, e.g. https://whereabouts.onrender.com — used in email links.
+      - key: PUBLIC_URL
+        sync: false
+      # Optional email (leave unset to log verification links to the log instead).
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
